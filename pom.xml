@@ -2,16 +2,229 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
+  <modelVersion>4.0.0</modelVersion>
 
-    <groupId>app.zylos</groupId>
-    <artifactId>zylos-infra-keycloak-extensions</artifactId>
-    <version>1.0-SNAPSHOT</version>
+  <!--
+    zylos-infra-keycloak-extensions
 
-    <properties>
-        <maven.compiler.source>25</maven.compiler.source>
-        <maven.compiler.target>25</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
+    Custom Keycloak SPI extensions for the Zylos platform.
+    Currently ships a single extension:
+
+      - ActClaimMapper: populates the RFC 8693 `act` claim on tokens
+        issued via Standard Token Exchange V2, with the requesting
+        client (the actor) recorded.
+
+    Future extensions (chain-aware TokenExchangeProvider, custom
+    authenticators) will land in this repo as additional sources.
+
+    DELIBERATE STANDALONE: this repo does NOT inherit from
+    zylos-service-parent. Reasoning:
+      - Runs inside Keycloak's Quarkus JVM (Java 21), not Spring Boot
+      - Uses Keycloak SPI, not Spring
+      - Different deploy artifact (provider JAR, not Spring Boot
+        fat-jar) and different runtime constraints
+  -->
+
+  <groupId>app.zylos</groupId>
+  <artifactId>zylos-infra-keycloak-extensions</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>Zylos :: Keycloak Extensions</name>
+  <description>Custom Keycloak SPI extensions for the Zylos platform</description>
+  <url>https://github.com/zylos-platform/zylos-infra-keycloak-extensions</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+    </license>
+  </licenses>
+
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <keycloak.version>26.6.1</keycloak.version>
+    <junit.version>5.11.4</junit.version>
+    <assertj.version>3.27.7</assertj.version>
+    <mockito.version>5.23.0</mockito.version>
+  </properties>
+
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>GitHub Packages</name>
+      <url>https://maven.pkg.github.com/zylos-platform/zylos-infra-keycloak-extensions</url>
+    </repository>
+  </distributionManagement>
+
+  <dependencies>
+
+    <!-- ============================================================ -->
+    <!--  Keycloak SPI dependencies — PROVIDED scope.                 -->
+    <!--                                                              -->
+    <!--  These are on Keycloak's runtime classpath; including them   -->
+    <!--  in the deployed JAR would cause class duplication. The      -->
+    <!--  `provided` scope means they're available at compile/test    -->
+    <!--  but NOT packaged.                                            -->
+    <!-- ============================================================ -->
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-core</artifactId>
+      <version>${keycloak.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-server-spi</artifactId>
+      <version>${keycloak.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-server-spi-private</artifactId>
+      <version>${keycloak.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.keycloak</groupId>
+      <artifactId>keycloak-services</artifactId>
+      <version>${keycloak.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- ============================================================ -->
+    <!--  Test dependencies                                            -->
+    <!-- ============================================================ -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>${assertj.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>${mockito.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-junit-jupiter</artifactId>
+      <version>${mockito.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+  </dependencies>
+
+  <build>
+    <finalName>zylos-keycloak-extensions-${project.version}</finalName>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Implementation-Title>${project.name}</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Implementation-Vendor>zylos-platform</Implementation-Vendor>
+              <Keycloak-Compatible-Version>${keycloak.version}</Keycloak-Compatible-Version>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- JaCoCo for coverage -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.13</version>
+        <executions>
+          <execution>
+            <id>prepare-agent</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <rule>
+                  <element>BUNDLE</element>
+                  <limits>
+                    <limit>
+                      <counter>LINE</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.80</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Spotless / Palantir Java Format -->
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>2.44.0</version>
+        <configuration>
+          <java>
+            <palantirJavaFormat>
+              <version>2.90.0</version>
+            </palantirJavaFormat>
+            <removeUnusedImports/>
+            <trimTrailingWhitespace/>
+            <endWithNewline/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <id>spotless-check</id>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>validate</phase>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
 </project>
