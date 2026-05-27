@@ -59,6 +59,58 @@ echo $EXCHANGED_TOKEN | cut -d. -f2 | base64 -d 2>/dev/null | jq .act
 # Expected output: { "client_id": "zylos-gateway" }
 ```
 
+## Deploy to Keycloak
+
+### Option 1: Use the pre-built image (recommended)
+
+The simplest option. The custom image is published to GHCR on every release:
+
+```yaml
+# Keycloak CR (Keycloak Operator)
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: zylos-keycloak
+spec:
+  image: ghcr.io/zylos-platform/keycloak:26.6.1-zylos-act-0.1.0
+  startOptimized: true
+  # ...rest of spec
+```
+
+The image bakes in `kc.sh build` so `startOptimized: true` works without additional configuration.
+
+### Option 2: Mount the JAR into a stock image
+
+For environments where pulling the custom image isn't possible:
+
+```yaml
+spec:
+  image: quay.io/keycloak/keycloak:26.6.1
+  startOptimized: false  # required — kc.sh build hasn't run on this combined state
+  unsupported:
+    podTemplate:
+      spec:
+        initContainers:
+          - name: load-zylos-extensions
+            image: ghcr.io/zylos-platform/zylos-keycloak-extensions-jar:0.1.0
+            command: [ "sh", "-c", "cp /jar/*.jar /providers/" ]
+            volumeMounts:
+              - name: providers
+                mountPath: /providers
+        volumes:
+          - name: providers
+            emptyDir: { }
+        containers:
+          - name: keycloak
+            volumeMounts:
+              - name: providers
+                mountPath: /opt/keycloak/providers
+```
+
+Trade-off: startup is slower (~30s vs ~5s) because Keycloak runs `kc.sh build` at every pod start.
+
+**Option 1 is strongly preferred** for production. Option 2 is documented for completeness only.
+
 ## Troubleshooting
 
 **Mapper not appearing in admin UI:**

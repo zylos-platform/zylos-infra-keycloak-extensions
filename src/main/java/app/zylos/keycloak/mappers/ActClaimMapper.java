@@ -152,9 +152,18 @@ public class ActClaimMapper extends AbstractOIDCProtocolMapper
         ClientModel targetClient = clientSessionCtx.getClientSession().getClient();
         ClientModel requestingClient = keycloakSession.getContext().getClient();
 
-        if (!isExchangeFlow(requestingClient, targetClient)) {
+        String grantType = null;
+        var httpRequest = keycloakSession.getContext().getHttpRequest();
+
+        if (httpRequest != null && httpRequest.getDecodedFormParameters() != null) {
+            grantType = httpRequest.getDecodedFormParameters().getFirst("grant_type");
+        }
+
+        boolean isV2Exchange = "urn:ietf:params:oauth:grant-type:token-exchange".equals(grantType);
+
+        if (!isExchangeFlow(requestingClient, targetClient) && !isV2Exchange) {
             LOG.debugv(
-                    "ActClaimMapper: skipping — not an exchange flow " + "(requesting={0}, target={1})",
+                    "ActClaimMapper: skipping — not an exchange flow (requesting={0}, target={1})",
                     safeClientId(requestingClient), safeClientId(targetClient));
             return;
         }
@@ -162,7 +171,7 @@ public class ActClaimMapper extends AbstractOIDCProtocolMapper
         String actorClientId = requestingClient.getClientId();
         if (actorClientId == null || actorClientId.isBlank()) {
             LOG.warnv(
-                    "ActClaimMapper: requesting client has no client_id; " + "skipping act claim for target={0}",
+                    "ActClaimMapper: requesting client has no client_id; skipping act claim for target={0}",
                     safeClientId(targetClient));
             return;
         }

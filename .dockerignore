@@ -1,0 +1,28 @@
+# Keep the docker build context tight — only the JAR plus this Dockerfile.
+.git
+.github
+.idea
+.vscode
+.mvn
+mvnw
+mvnw.cmd
+src
+docs
+*.md
+LICENSE
+pom.xml
+.gitignore
+.gitattributes
+.editorconfig
+.commitlintrc.json
+target/classes
+target/test-classes
+target/site
+target/surefire-reports
+target/maven-archiver
+target/maven-status
+target/generated-sources
+target/generated-test-sources
+
+# Permit only the artifact we need: the provider JAR.
+!target/zylos-keycloak-extensions-*.jar

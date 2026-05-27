@@ -138,17 +138,24 @@ This is deferred to Phase 2 unless a concrete need emerges.
 
 ## Verification
 
-- Unit tests in `ActClaimMapperTest` cover: exchange flow detection,
-  normal-login no-op, client-credentials no-op, edge cases (null
-  clients, blank client IDs), and the `isExchangeFlow` helper directly.
-- Integration tests against a real Keycloak with the mapper deployed
-  arrive in future PR.
-- End-to-end tests via the updated security-starter integration tests
-  arrive in future PR.
+Three layers of verification:
+
+1. **Unit tests** (`ActClaimMapperTest`) — Mockito-based tests covering exchange flow detection, normal-login no-op,
+   client-credentials no-op, edge cases (null clients, blank client IDs), and the `isExchangeFlow` helper directly. Run
+   during `mvn test`.
+
+2. **Integration tests** (`ActClaimMapperIT`) — Testcontainers test running a real Keycloak 26.6.1 with the
+   freshly-built provider JAR mounted. Performs a real RFC 8693 token exchange and asserts the `act.client_id` appears
+   with the correct value. Also verifies negative cases: direct grants produce no `act`; exchange from a client without
+   the mapper attached produces no `act`. Run during `mvn verify`.
+
+3. **End-to-end deployment validation** — via update to `zylos-infra-gitops`, which references the published
+   Docker image and runs against the real cluster's Keycloak. Then validates the full chain through the security
+   starter's integration tests with the new image in place.
 
 ## References
 
-- RFC 8693 §4.1: <https://datatracker.ietf.org/doc/html/rfc8693#section-4.1>
+- RFC 8693 : <https://datatracker.ietf.org/doc/html/rfc8693#section-4.1>
 - Keycloak #38279 (delegation support tracking issue): <https://github.com/keycloak/keycloak/issues/38279>
 - Keycloak protocol mapper SPI
   docs: <https://www.keycloak.org/docs-api/latest/javadocs/org/keycloak/protocol/oidc/mappers/package-summary.html>

@@ -53,6 +53,46 @@ Deploy to Keycloak (one of):
 Activate the mapper for a client via realm-config-cli (see `docs/usage.md` for the YAML snippet) or via the admin UI
 under: Clients → *client_id* → Client scopes → Add mapper from configured → **Zylos Act Claim Mapper**.
 
+## Docker Image
+
+Releases publish a custom Keycloak image to GHCR with the ActClaimMapper pre-installed and the build step baked in:
+
+```
+ghcr.io/zylos-platform/keycloak:26.6.1-zylos-act-0.1.0
+ghcr.io/zylos-platform/keycloak:latest-zylos-act
+```
+
+This image is what `zylos-infra-gitops` references for the Keycloak operator's `image` field. Built via the multi-stage
+`Dockerfile` at the repo root:
+
+- **Builder stage:** places the provider JAR in `/opt/keycloak/providers/`, runs `kc.sh build` to index and cache
+  providers
+- **Final stage:** copies the entire built tree from builder, preserving JAR mtimes so `start --optimized` works at
+  runtime
+
+Build args:
+
+- `KEYCLOAK_VERSION` — base Keycloak version (default 26.6.1)
+- `ZYLOS_EXTENSIONS_VERSION` — populated by CI from the release tag
+
+Build locally for development:
+
+```bash
+./mvnw -DskipTests package
+docker build --build-arg ZYLOS_EXTENSIONS_VERSION=0.1.0-local -t zylos/keycloak:dev .
+```
+
+## Verification
+
+Integration tests against a real Keycloak (no Docker image needed — uses vanilla Keycloak with JAR mounted):
+
+```bash
+./mvnw verify
+```
+
+This runs `ActClaimMapperIT` which spins up Keycloak via Testcontainers, performs a real RFC 8693 token exchange, and
+asserts the `act` claim populates correctly.
+
 ## Compatibility
 
 - Keycloak 26.6.x
